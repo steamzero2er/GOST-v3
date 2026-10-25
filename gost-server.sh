@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 用法:
+  gost-server.sh                         # 交互式填写
   gost-server.sh <客户端公网IP> <服务端转发端口> <decrypt|encrypt|plain> [隧道端口=8443] [隧道ID]
 
 decrypt/encrypt 表示启用 TLS/WSS；plain 表示明文。
@@ -19,12 +20,32 @@ valid_port() {
   (( n >= 1 && n <= 65535 ))
 }
 
+CONFIG_DIR=${GOST_FORWARD_DIR:-/etc/gost-forward}
+
+if (( $# == 0 )); then
+  echo "GOST 服务端配置（直接回车使用方括号中的默认值）"
+  read -r -p "客户端公网 IP: " CLIENT_IP
+  read -r -p "服务端转发端口（TCP/UDP 同号）: " FORWARD_PORT
+  while true; do
+    read -r -p "传输模式 [1=加密/解密（TLS，推荐）, 2=不加密] (1): " MODE_CHOICE
+    MODE_CHOICE=${MODE_CHOICE:-1}
+    case "$MODE_CHOICE" in
+      1) MODE=decrypt; break ;;
+      2) MODE=plain; break ;;
+      *) echo "请输入 1 或 2。" ;;
+    esac
+  done
+  read -r -p "隧道控制端口 [8443]: " TUNNEL_PORT
+  TUNNEL_PORT=${TUNNEL_PORT:-8443}
+  read -r -p "隧道 ID [留空自动生成]: " TUNNEL_ID_INPUT
+  set -- "$CLIENT_IP" "$FORWARD_PORT" "$MODE" "$TUNNEL_PORT" "$TUNNEL_ID_INPUT"
+fi
+
 [[ $# -ge 3 && $# -le 5 ]] || { usage; exit 2; }
 CLIENT_IP=$1
 FORWARD_PORT=$2
 MODE=$3
 TUNNEL_PORT=${4:-8443}
-CONFIG_DIR=${GOST_FORWARD_DIR:-/etc/gost-forward}
 
 [[ "$CLIENT_IP" =~ ^[0-9A-Fa-f:.]+$ ]] || fail "客户端 IP 必须是 IPv4 或 IPv6 地址"
 valid_port "$FORWARD_PORT" || fail "转发端口必须在 1-65535 之间"

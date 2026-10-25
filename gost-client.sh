@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 用法:
+  gost-client.sh                         # 交互式填写
   gost-client.sh <服务端IP> <客户端接收端口> <encrypt|decrypt|plain> <隧道ID> [隧道端口=8443] [服务端证书=/etc/gost-forward/server.crt] [本地目标地址=127.0.0.1]
 
 encrypt/decrypt 表示启用 TLS/WSS；plain 表示明文。
@@ -28,13 +29,37 @@ host_port() {
   fi
 }
 
+CONFIG_DIR=${GOST_FORWARD_DIR:-/etc/gost-forward}
+
+if (( $# == 0 )); then
+  echo "GOST 客户端配置（直接回车使用方括号中的默认值）"
+  read -r -p "服务端 IP: " SERVER_IP
+  read -r -p "客户端本机接收/目标端口: " RECEIVE_PORT
+  while true; do
+    read -r -p "传输模式 [1=加密/解密（TLS，推荐）, 2=不加密] (1): " MODE_CHOICE
+    MODE_CHOICE=${MODE_CHOICE:-1}
+    case "$MODE_CHOICE" in
+      1) MODE=encrypt; break ;;
+      2) MODE=plain; break ;;
+      *) echo "请输入 1 或 2。" ;;
+    esac
+  done
+  read -r -p "隧道 ID（从服务端启动信息复制）: " TUNNEL_ID
+  read -r -p "隧道控制端口 [8443]: " TUNNEL_PORT
+  TUNNEL_PORT=${TUNNEL_PORT:-8443}
+  read -r -p "服务端证书路径 [$CONFIG_DIR/server.crt]: " CA_FILE
+  CA_FILE=${CA_FILE:-$CONFIG_DIR/server.crt}
+  read -r -p "本地目标地址 [127.0.0.1]: " TARGET_HOST
+  TARGET_HOST=${TARGET_HOST:-127.0.0.1}
+  set -- "$SERVER_IP" "$RECEIVE_PORT" "$MODE" "$TUNNEL_ID" "$TUNNEL_PORT" "$CA_FILE" "$TARGET_HOST"
+fi
+
 [[ $# -ge 4 && $# -le 7 ]] || { usage; exit 2; }
 SERVER_IP=$1
 RECEIVE_PORT=$2
 MODE=$3
 TUNNEL_ID=$4
 TUNNEL_PORT=${5:-8443}
-CONFIG_DIR=${GOST_FORWARD_DIR:-/etc/gost-forward}
 CA_FILE=${6:-$CONFIG_DIR/server.crt}
 TARGET_HOST=${7:-127.0.0.1}
 
